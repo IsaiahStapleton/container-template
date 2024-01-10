@@ -6,7 +6,7 @@ ARG FROM_REG
 ARG FROM_IMAGE
 ARG FROM_TAG
 
-FROM ${FROM_REG}${FROM_IMAGE}${FROM_TAG}
+FROM ${FROM_REG}${FROM_IMAGE}${FROM_TAG} AS build 
 
 LABEL maintainer="Open Education <opeffort@gmail.com>"
 
@@ -75,22 +75,11 @@ RUN for ext in ${JUPYTER_DISABLE_EXTENSIONS} ; do \
 # copy overrides.json
 COPY settings ${CONDA_DIR}/share/jupyter/lab/settings
 
-USER root
+FROM ${FROM_REG}${FROM_IMAGE}${FROM_TAG} as final-stage
 
-# final bits of cleanup
-RUN touch /home/${NB_USER}/.hushlogin && \
-# use a short prompt to improve default behaviour in presentations
-    echo "export PS1='\$ '" >> /home/${NB_USER}/.bashrc && \
-# work around bug when term is xterm and emacs runs in xterm.js -- causes escape characters in file
-    echo "export TERM=linux" >> /home/${NB_USER}/.bashrc && \
-# finally remove default working directory from joyvan home
-    rmdir /home/${NB_USER}/work && \
-    # as per the nbstripout readme we setup nbstripout be always be used for the joyvan user for all repos
-    nbstripout --install --system 
+COPY --from=build /opt/conda/ /opt/conda/
+COPY --from=build /home/${NB_USER}/ /home/${NB_USER}/
 
-# Static Customize for OPE USER ID choices
-# To avoid problems with start.sh logic we do not modify user name
-# FIXME: Add support for swinging home directory if you want to point to a mounted volume
 ARG OPE_UID
 ENV NB_UID=${OPE_UID}
 
@@ -105,6 +94,24 @@ ARG CHOWN_HOME=yes
 ARG CHOWN_HOME_OPTS="-R"
 ARG CHOWN_EXTRA_OPTS='-R'
 ARG CHOWN_EXTRA="${EXTRA_CHOWN} ${CONDA_DIR}"
+
+
+USER root
+
+# final bits of cleanup
+RUN touch /home/${NB_USER}/.hushlogin && \
+# use a short prompt to improve default behaviour in presentations
+    echo "export PS1='\$ '" >> /home/${NB_USER}/.bashrc && \
+# work around bug when term is xterm and emacs runs in xterm.js -- causes escape characters in file
+    echo "export TERM=linux" >> /home/${NB_USER}/.bashrc && \
+# finally remove default working directory from joyvan home
+    rmdir /home/${NB_USER}/work && \
+    # as per the nbstripout readme we setup nbstripout be always be used for the joyvan user for all repos
+    nbstripout --install --system 
+
+
+# Static Customize for OPE USER ID choices
+# To avoid problems with start.sh logic we do not modify user name
 
 # Done customization
 

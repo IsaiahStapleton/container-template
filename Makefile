@@ -50,7 +50,13 @@ CUSTOMIZE_FROM := $(shell if  [[ -a base/customize_from ]]; then cat base/custom
 # <reg>/<ope_project>:<ope_container>-<stable|test>-<customization>-<latest|date>
 # quay.io/ucsls:stable-ucsls-burosa2023prod-latest
 
-CUSTOMIZE_NAME := $(CUSTOMIZE_FROM)-test-$(shell cat base/customize_name) 
+CUSTOMIZE_NAME := $(shell cat base/customize_name)
+
+CUSTOMIZE_FROM_TAG := $(shell awk -F: '{print $$2}' base/customize_from)
+
+CUSTOMIZE_FROM_WTAG := $(CUSTOMIZE_FROM)-$(CUSTOMIZE_NAME)
+
+CUSTOMIZE_REPO := $(shell cat base/customize_repo)
 
 CUSTOMIZE_UID := $(shell cat base/customize_uid)
 CUSTOMIZE_GID := $(shell cat base/customize_gid)
@@ -82,14 +88,16 @@ build: DARGS ?= --build-arg FROM_REG=$(BASE_REG) \
 build: ## Make the image customized appropriately
 	docker build $(DARGS) $(DCACHING) -t $(OPE_BOOK_REG)$(OPE_BOOK_IMAGE)$(OPE_BETA_TAG) --file base/Build.Dockerfile base
 	
-customize: DARGS ?= --build-arg FROM_IMAGE=$(CUSTOMIZE_FROM) \
+customize: DARGS ?= --build-arg FROM_REG=$(BASE_REG) \
+                   --build-arg FROM_IMAGE=$(BASE_IMAGE) \
+                   --build-arg FROM_TAG=$(BASE_TAG) \
+				   --build-arg CUSTOMIZE_FROM=$(CUSTOMIZE_FROM) \
                    --build-arg CUSTOMIZE_UID=$(CUSTOMIZE_UID) \
                    --build-arg CUSTOMIZE_GID=$(CUSTOMIZE_GID) \
                    --build-arg CUSTOMIZE_GROUP=$(CUSTOMIZE_GROUP) \
 		           --build-arg EXTRA_CHOWN="$(EXTRA_CHOWN)"
 customize:  ## build a customized deployment image
-	docker build $(DARGS) $(DCACHING) --rm --force-rm -t $(CUSTOMIZE_NAME) --file base/Customize.Dockerfile base 
-	docker-squash -t $(CUSTOMIZE_NAME) $(CUSTOMIZE_NAME)
+	docker build $(DARGS) $(DCACHING) --rm --force-rm -t $(CUSTOMIZE_FROM_WTAG) --file base/Customize.Dockerfile base 
 
 push: DARGS ?=
 push: ## push private build
@@ -150,7 +158,6 @@ pull:
 pull: ## pull most recent public version
 	docker pull $(OPE_BOOK_REG)$(OPE_BOOK_IMAGE)$(OPE_PUBLIC_TAG)
 
-# TODO: Cut out SSH port
 run: pull
 run: ARGS ?=
 run: DARGS ?= -u $(OPE_UID):$(OPE_GID) -v "${HOST_DIR}":"${MOUNT_DIR}" -v "${SSH_AUTH_SOCK}":"${SSH_AUTH_SOCK}" -v "${SSH_AUTH_SOCK}":"${SSH_AUTH_SOCK}" -e SSH_AUTH_SOCK=${SSH_AUTH_SOCK}
@@ -162,4 +169,11 @@ run-cust: ARGS ?=
 run-cust: DARGS ?= -u $(CUSTOMIZE_UID):$(CUSTOMIZE_GID) -v "${HOST_DIR}":"${MOUNT_DIR}" -v "${SSH_AUTH_SOCK}":"${SSH_AUTH_SOCK}" -v "${SSH_AUTH_SOCK}":"${SSH_AUTH_SOCK}" -e SSH_AUTH_SOCK=${SSH_AUTH_SOCK} 
 run-cust: PORT ?= 8888
 run-cust: ## start published version with jupyter lab interface
-	docker run -it --rm -p $(PORT):$(PORT) $(DARGS) $(CUSTOMIZE_NAME) $(ARGS)
+	docker run -it --rm -p $(PORT):$(PORT) $(DARGS) $(CUSTOMIZE_FROM_WTAG) $(ARGS)
+
+push-cust: DARGS ?=
+push-cust: ## publish current custom build 
+# push to private image repo
+	docker tag $(CUSTOMIZE_FROM_WTAG) $(CUSTOMIZE_REPO):$(CUSTOMIZE_FROM_TAG)-$(CUSTOMIZE_NAME)
+	docker push $(CUSTOMIZE_REPO):$(CUSTOMIZE_FROM_TAG)-$(CUSTOMIZE_NAME)
+
