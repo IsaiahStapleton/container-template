@@ -174,6 +174,6 @@ run-cust: ## start published version with jupyter lab interface
 push-cust: DARGS ?=
 push-cust: ## publish current custom build 
 # push to private image repo
-	docker tag $(CUSTOMIZE_FROM_WTAG) $(CUSTOMIZE_REPO):$(CUSTOMIZE_FROM_TAG)-$(CUSTOMIZE_NAME)
-	docker push $(CUSTOMIZE_REPO):$(CUSTOMIZE_FROM_TAG)-$(CUSTOMIZE_NAME)
+	docker tag $(CUSTOMIZE_FROM_WTAG) $(CUSTOMIZE_REPO):$(CUSTOMIZE_NAME)
+	docker push $(CUSTOMIZE_REPO):$(CUSTOMIZE_NAME)
 
